@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import simpledialog, PhotoImage
+from tkinter import simpledialog, PhotoImage, ttk
 import sqlite3
 from datetime import datetime
 import math
@@ -173,7 +173,7 @@ class CompetitionApp:
         if hasattr(self, "board") and self.board.winfo_exists():
             self.board.destroy()
 
-        sorted_teams = self.teams.items()  #sorted(self.teams.items(), key=lambda x: x[1]["score"], reverse=True)
+        sorted_teams = list(self.teams.items())  # ensure it's a list
 
         # Create new scoreboard area
         self.board = tk.Frame(self.root, bg="#74b9ff")
@@ -184,28 +184,73 @@ class CompetitionApp:
         cols = 2
         rows = math.ceil(n / cols)
 
+        # Dropdown values
+        xal_values = [100 * i for i in range(0, 11)]  # [0,100,200,...,1000]
+
+        # ---------- Xal selector (top row) ----------
+        xal_frame = tk.Frame(self.board, bg="#0984e3")
+        xal_frame.grid(row=0, column=0, columnspan=cols, sticky="ew", padx=10, pady=(12, 8))
+
+        tk.Label(
+            xal_frame,
+            text="Xal:",
+            font=("Arial", 18, "bold"),
+            bg="#0984e3",
+            fg="white"
+        ).grid(row=0, column=0, padx=(10, 8), pady=8, sticky="w")
+
+        self.xal_var = tk.IntVar(value=0)
+        style = ttk.Style()
+        style.configure("Large.TCombobox", font=("Arial", 16), padding=6)
+
+        xal_combo = ttk.Combobox(
+            xal_frame,
+            textvariable=self.xal_var,
+            values=xal_values,
+            width=6,
+            style="Large.TCombobox",
+            state="readonly"
+        )
+        # ipady increases internal vertical padding => visually taller combobox
+        xal_combo.grid(row=0, column=1, padx=(0, 10), pady=8, ipady=6, sticky="w")
+        xal_combo.set(0)
+
+        # ---------- Team boxes (start from row 1) ----------
+        start_row = 1
         for i, (team_id, team) in enumerate(sorted_teams):
             r, c = divmod(i, cols)
             color = self.team_colors[i % len(self.team_colors)]
-            frame = tk.Frame(self.board, bg=color, padx=30, pady=30, relief="flat", bd=10)
-            frame.grid(row=r, column=c, padx=60, pady=60, sticky="nsew")
+            frame = tk.Frame(self.board, bg=color, padx=30, pady=15, relief="flat", bd=10)
+            frame.grid(row=r + start_row, column=c, padx=60, pady=30, sticky="nsew")
 
-            tk.Label(frame, text=team["name"], font=("Arial", 22, "bold"), bg=color, fg="white").grid(row=0, column=0, columnspan=3, pady=10)
+            tk.Label(frame, text=team["name"], font=("Arial", 22, "bold"), bg=color, fg="white") \
+                .grid(row=0, column=0, columnspan=3, pady=10)
             lbl = tk.Label(frame, text=str(team["score"]), font=("Arial", 32, "bold"), bg=color, fg="white")
             lbl.grid(row=1, column=1, pady=10)
             self.labels[team_id] = lbl
 
             tk.Button(frame, text="+", font=("Arial", 22, "bold"), bg="#2ecc71", fg="white", relief="flat",
-                      width=3, command=lambda t=team_id: self.update_score(t, 100)).grid(row=1, column=2, padx=20)
+                      width=3, command=lambda t=team_id: self.update_score(t, self.xal_var.get())) \
+                .grid(row=1, column=2, padx=20)
             tk.Button(frame, text="-", font=("Arial", 22, "bold"), bg="#e74c3c", fg="white", relief="flat",
-                      width=3, command=lambda t=team_id: self.update_score(t, -100)).grid(row=1, column=0, padx=20)
+                      width=3, command=lambda t=team_id: self.update_score(t, -100)) \
+                .grid(row=1, column=0, padx=20)
 
-        for r in range(rows):
+        # ---------- Grid configuration ----------
+        # Make top row (xal selector) fixed-ish so it doesn't get squashed
+        top_row_min = 80  # tweak this to make the top selector taller/shorter
+        self.board.grid_rowconfigure(0, weight=0, minsize=top_row_min)
+
+        # Make only the team rows expandable
+        for r in range(start_row, rows + start_row):
             self.board.grid_rowconfigure(r, weight=1)
+
         for c in range(cols):
             self.board.grid_columnconfigure(c, weight=1)
 
     def update_score(self, team_id, points):
+        if points == 0:
+            return
         self.teams[team_id]["score"] += points
         cursor = self.conn.cursor()
         cursor.execute("UPDATE teams SET score=? WHERE id=?", (self.teams[team_id]["score"], team_id))
