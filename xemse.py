@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime
 import math
 import os
+from tkinter import filedialog
+from PIL import Image, ImageTk
 
 class CompetitionApp:
     def __init__(self, root):
@@ -44,6 +46,16 @@ class CompetitionApp:
                 competition_id INTEGER,
                 name TEXT,
                 score INTEGER DEFAULT 0
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                competition_id INTEGER,
+                question_text TEXT,
+                image_path TEXT,
+                FOREIGN KEY (competition_id) REFERENCES competitions(id)
             )
         """)
         self.conn.commit()
@@ -300,6 +312,71 @@ class CompetitionApp:
 
         messagebox.showinfo("Silindi", "Yarış uğurla silindi.")
         self.view_competitions()  # Refresh the list    
+
+def add_questions(self):
+    self.clear_window()
+    self.create_navbar(lambda: self.load_scoreboard(), "Suallar əlavə et")
+
+    frame = tk.Frame(self.root, bg="#74b9ff")
+    frame.pack(expand=True, pady=20)
+
+    self.questions_data = []  # list of {"text_entry": ..., "img_label": ..., "img_path": ...}
+
+    for i in range(3):  # allow adding 3 questions at once
+        q_frame = tk.Frame(frame, bg="#0984e3", padx=20, pady=20, relief="raised", bd=3)
+        q_frame.pack(pady=15, fill="x", padx=30)
+
+        tk.Label(q_frame, text=f"Sual {i+1}:", font=("Arial", 16, "bold"),
+                 bg="#0984e3", fg="white").pack(anchor="w")
+
+        entry = tk.Entry(q_frame, font=("Arial", 16), width=80, bd=3, relief="ridge")
+        entry.pack(pady=5)
+
+        img_label = tk.Label(q_frame, bg="#0984e3")
+        img_label.pack(pady=5)
+
+        def choose_image(lbl=img_label, i=i):
+            path = filedialog.askopenfilename(
+                title="Şəkil seçin",
+                filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif")]
+            )
+            if path:
+                img = Image.open(path)
+                img.thumbnail((200, 200))
+                img_tk = ImageTk.PhotoImage(img)
+                lbl.config(image=img_tk)
+                lbl.image = img_tk
+                self.questions_data[i]["img_path"] = path
+
+        btn = tk.Button(q_frame, text="📷 Şəkil əlavə et", font=("Arial", 14),
+                        bg="#00b894", fg="white", relief="flat",
+                        command=choose_image)
+        btn.pack()
+
+        self.questions_data.append({
+            "text_entry": entry,
+            "img_label": img_label,
+            "img_path": None
+        })
+
+    self.modern_button(frame, "💾 Yadda saxla", "#0984e3", self.save_questions).pack(pady=30)
+
+def save_questions(self):
+    cursor = self.conn.cursor()
+    for q in self.questions_data:
+        text = q["text_entry"].get().strip()
+        img_path = q["img_path"]
+        if text:
+            cursor.execute("""
+                INSERT INTO questions (competition_id, question_text, image_path)
+                VALUES (?, ?, ?)
+            """, (self.current_competition_id, text, img_path))
+    self.conn.commit()
+
+    from tkinter import messagebox
+    messagebox.showinfo("Uğurla", "Suallar əlavə olundu!")
+    self.load_scoreboard()
+
 
 
 if __name__ == "__main__":
